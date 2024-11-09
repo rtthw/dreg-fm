@@ -24,6 +24,7 @@ fn main() -> Result<()> {
             dir: DirContent::new(std::env::current_dir()?)?,
             should_exit: false,
             show_hidden_files: true,
+            input_handler: InputHandler::default(),
         })
 }
 
@@ -44,6 +45,7 @@ pub struct FileManager {
     dir: DirContent,
     should_exit: bool,
     show_hidden_files: bool,
+    input_handler: InputHandler,
 }
 
 impl Program for FileManager {
@@ -62,8 +64,14 @@ impl Program for FileManager {
     fn on_input(&mut self, input: Input) {
         match input {
             Input::KeyDown(Scancode::Q) => self.handle_command("exit"),
-            Input::KeyDown(Scancode::H) => self.handle_command("toggle_show_hidden_files"),
-            _ => {}
+            Input::KeyDown(Scancode::H) => {
+                if self.input_handler.alt {
+                    self.handle_command("toggle_show_hidden_files");
+                }
+            }
+            i => {
+                self.input_handler.handle_input(i);
+            }
         }
     }
 
@@ -116,6 +124,47 @@ impl FileManager {
                 row.width as usize,
                 Style::new().dim().fg(fg),
             );
+        }
+    }
+}
+
+
+
+#[derive(Clone, Default)]
+pub struct InputHandler {
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+}
+
+impl InputHandler {
+    pub fn handle_input(&mut self, input: Input) {
+        match input {
+            Input::KeyDown(code) => match code {
+                Scancode::L_CTRL | Scancode::R_CTRL => {
+                    self.ctrl = true;
+                }
+                Scancode::L_ALT | Scancode::R_ALT => {
+                    self.alt = true;
+                }
+                Scancode::L_SHIFT | Scancode::R_SHIFT => {
+                    self.shift = true;
+                }
+                _ => {}
+            }
+            Input::KeyUp(code) => match code {
+                Scancode::L_CTRL | Scancode::R_CTRL => {
+                    self.ctrl = false;
+                }
+                Scancode::L_ALT | Scancode::R_ALT => {
+                    self.alt = false;
+                }
+                Scancode::L_SHIFT | Scancode::R_SHIFT => {
+                    self.shift = false;
+                }
+                _ => {}
+            }
+            _ => {}
         }
     }
 }
