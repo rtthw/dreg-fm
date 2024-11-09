@@ -2,7 +2,7 @@
 
 
 
-use std::path::PathBuf;
+use std::{fs::DirEntry, path::PathBuf};
 
 use clap::Parser;
 use dreg::prelude::*;
@@ -18,10 +18,10 @@ fn main() -> Result<()> {
     if let Some(path) = args.path {
         std::env::set_current_dir(path)?;
     }
-
+    
     CrosstermPlatform::new()?
         .run(FileManager {
-            dir: std::env::current_dir()?,
+            dir: DirContent::new(std::env::current_dir()?)?,
             should_exit: false,
         })
 }
@@ -40,7 +40,7 @@ struct Cli {
 
 
 pub struct FileManager {
-    dir: PathBuf,
+    dir: DirContent,
     should_exit: bool,
 }
 
@@ -53,6 +53,8 @@ impl Program for FileManager {
         Block::new(Style::new()).render(left_area, &mut frame.buffer);
         Block::new(Style::new()).render(middle_area, &mut frame.buffer);
         Block::new(Style::new()).render(right_area, &mut frame.buffer);
+
+        self.render_middle(middle_area.inner(1, 1), &mut frame.buffer);
     }
 
     fn on_input(&mut self, input: Input) {
@@ -77,6 +79,21 @@ impl FileManager {
     }
 }
 
+impl FileManager {
+    fn render_middle(&mut self, area: Rect, buf: &mut Buffer) {
+        // TODO: Scrolling.
+        for (row, entry) in area.rows().into_iter().zip(self.dir.children.iter()) {
+            buf.set_stringn(
+                row.x,
+                row.y,
+                entry.file_name().to_string_lossy(),
+                row.width as usize,
+                Style::new().dim().fg(Color::Green),
+            );
+        }
+    }
+}
+
 
 
 #[derive(Clone, Copy)]
@@ -90,5 +107,26 @@ impl From<&'static str> for Command {
             "exit" => Self::Exit,
             c => unreachable!("invalid command initializer: {c}"),
         }
+    }
+}
+
+
+
+pub struct DirContent {
+    pub path: PathBuf,
+    pub children: Vec<DirEntry>,
+}
+
+impl DirContent {
+    pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
+        let path = path.into();
+        let children = std::fs::read_dir(&path)?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        Ok(Self {
+            path,
+            children,
+        })
     }
 }
