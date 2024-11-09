@@ -6,6 +6,9 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use dreg::prelude::*;
+use widgets::Block;
+
+mod widgets;
 
 
 
@@ -38,15 +41,14 @@ pub struct FileManager {
 }
 
 impl Program for FileManager {
-    fn update(&mut self, frame: Frame) {
+    fn update(&mut self, mut frame: Frame) {
         let area = frame.area;
-        frame.buffer.set_stringn(
-            area.x,
-            area.y,
-            format!("{}", self.dir.display()),
-            area.width as usize,
-            Style::new(),
-        );
+        let (left_area, right_area) = area.hsplit_portion(0.2);
+        let (middle_area, right_area) = right_area.hsplit_portion(0.5);
+
+        Block::new(Style::new()).render(left_area, &mut frame.buffer);
+        Block::new(Style::new()).render(middle_area, &mut frame.buffer);
+        Block::new(Style::new()).render(right_area, &mut frame.buffer);
     }
 
     fn on_input(&mut self, input: Input) {
