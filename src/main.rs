@@ -10,7 +10,7 @@ use widgets::Block;
 
 mod widgets;
 
-
+
 
 fn main() -> Result<()> {
     let args = Cli::parse();
@@ -26,6 +26,8 @@ fn main() -> Result<()> {
         })
 }
 
+
+
 /// Simple dreg-based file manager
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -34,6 +36,8 @@ struct Cli {
     #[arg(short, long)]
     path: Option<PathBuf>,
 }
+
+
 
 pub struct FileManager {
     dir: PathBuf,
@@ -53,9 +57,7 @@ impl Program for FileManager {
 
     fn on_input(&mut self, input: Input) {
         match input {
-            Input::KeyDown(Scancode::Q) => {
-                self.should_exit = true;
-            }
+            Input::KeyDown(Scancode::Q) => self.handle_command("exit"),
             _ => {}
         }
     }
@@ -65,3 +67,28 @@ impl Program for FileManager {
     fn should_exit(&self) -> bool { self.should_exit }
 }
 
+impl FileManager {
+    pub fn handle_command(&mut self, command: impl Into<Command>) {
+        match command.into() {
+            Command::Exit => {
+                self.should_exit = true;
+            }
+        }
+    }
+}
+
+
+
+#[derive(Clone, Copy)]
+pub enum Command {
+    Exit,
+}
+
+impl From<&'static str> for Command {
+    fn from(value: &'static str) -> Self {
+        match value {
+            "exit" => Self::Exit,
+            c => unreachable!("invalid command initializer: {c}"),
+        }
+    }
+}
