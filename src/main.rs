@@ -24,6 +24,7 @@ fn main() -> Result<()> {
             dir: DirContent::new(std::env::current_dir()?)?,
             should_exit: false,
             show_hidden_files: true,
+            show_side_panel: false,
             input_handler: InputHandler::default(),
         })
 }
@@ -45,20 +46,24 @@ pub struct FileManager {
     dir: DirContent,
     should_exit: bool,
     show_hidden_files: bool,
+    show_side_panel: bool,
     input_handler: InputHandler,
 }
 
 impl Program for FileManager {
     fn update(&mut self, mut frame: Frame) {
-        let area = frame.area;
-        let (left_area, right_area) = area.hsplit_portion(0.2);
-        let (middle_area, right_area) = right_area.hsplit_portion(0.5);
+        let mut main_area = frame.area;
+        if self.show_side_panel {
+            let (side_area, area) = main_area.hsplit_portion(0.2);
+            main_area = area;
+            Block::new(Style::new().dim()).render(side_area, &mut frame.buffer);
+        }
+        let (main_area, view_area) = main_area.hsplit_portion(0.5);
 
-        Block::new(Style::new().dim()).render(left_area, &mut frame.buffer);
-        Block::new(Style::new()).render(middle_area, &mut frame.buffer);
-        Block::new(Style::new().dim()).render(right_area, &mut frame.buffer);
+        Block::new(Style::new()).render(main_area, &mut frame.buffer);
+        Block::new(Style::new().dim()).render(view_area, &mut frame.buffer);
 
-        self.render_middle(middle_area.inner(1, 1), &mut frame.buffer);
+        self.render_middle(main_area.inner(1, 1), &mut frame.buffer);
     }
 
     fn on_input(&mut self, input: Input) {
@@ -67,6 +72,11 @@ impl Program for FileManager {
             Input::KeyDown(Scancode::H) => {
                 if self.input_handler.alt {
                     self.handle_command("toggle_show_hidden_files");
+                }
+            }
+            Input::KeyDown(Scancode::S) => {
+                if self.input_handler.alt {
+                    self.handle_command("toggle_show_side_panel");
                 }
             }
             i => {
@@ -88,6 +98,9 @@ impl FileManager {
             }
             Command::ToggleShowHiddenFiles => {
                 self.show_hidden_files = !self.show_hidden_files;
+            }
+            Command::ToggleShowSidePanel => {
+                self.show_side_panel = !self.show_side_panel;
             }
         }
     }
@@ -175,6 +188,7 @@ impl InputHandler {
 pub enum Command {
     Exit,
     ToggleShowHiddenFiles,
+    ToggleShowSidePanel,
 }
 
 impl From<&'static str> for Command {
@@ -182,6 +196,8 @@ impl From<&'static str> for Command {
         match value {
             "exit" => Self::Exit,
             "toggle_show_hidden_files" => Self::ToggleShowHiddenFiles,
+            "toggle_show_side_panel" => Self::ToggleShowSidePanel,
+            // I don't believe static strings can be created dynamically, so this is fine.
             c => unreachable!("invalid command initializer: {c}"),
         }
     }
