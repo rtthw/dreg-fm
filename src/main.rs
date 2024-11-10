@@ -2,7 +2,7 @@
 
 
 
-use std::{fs::DirEntry, path::PathBuf};
+use std::{ffi::OsString, fs::DirEntry, path::PathBuf};
 
 use clap::Parser;
 use dreg::prelude::*;
@@ -105,11 +105,11 @@ impl FileManager {
         }
     }
 
-    pub fn iter_dir(&self) -> impl Iterator<Item = &DirEntry> {
+    pub fn iter_dir(&self) -> impl Iterator<Item = &Entry> {
         self.dir.children.iter()
             .filter(|e| {
                 if !self.show_hidden_files {
-                    if e.file_name().to_str().is_some_and(|s| s.starts_with(".")) {
+                    if e.file_name.to_str().is_some_and(|s| s.starts_with(".")) {
                         return false;
                     }
                 }
@@ -123,9 +123,9 @@ impl FileManager {
     fn render_middle(&mut self, area: Rect, buf: &mut Buffer) {
         // TODO: Scrolling.
         for (row, entry) in area.rows().into_iter().zip(self.iter_dir()) {
-            let fg = if entry.path().is_dir() {
+            let fg = if entry.path.is_dir() {
                 Color::Blue
-            } else if entry.path().is_symlink() {
+            } else if entry.path.is_symlink() {
                 Color::Yellow
             } else {
                 Color::Gray
@@ -133,7 +133,7 @@ impl FileManager {
             buf.set_stringn(
                 row.x,
                 row.y,
-                entry.file_name().to_string_lossy(),
+                entry.file_name.to_string_lossy(),
                 row.width as usize,
                 Style::new().dim().fg(fg),
             );
@@ -207,19 +207,19 @@ impl From<&'static str> for Command {
 
 pub struct DirContent {
     pub path: PathBuf,
-    pub children: Vec<DirEntry>,
+    pub children: Vec<Entry>,
 }
 
 impl DirContent {
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
-        let mut children: Vec<DirEntry> = std::fs::read_dir(&path)?
-            .filter_map(|e| e.ok())
+        let mut children: Vec<Entry> = std::fs::read_dir(&path)?
+            .filter_map(|e| e.ok().and_then(|e| Some(Entry::from(e))))
             .collect();
         children.sort_by(|a, b| {
-            if a.path().is_dir() == b.path().is_dir() {
-                a.file_name().cmp(&b.file_name())
-            } else if a.path().is_dir() {
+            if a.path.is_dir() == b.path.is_dir() {
+                a.file_name.cmp(&b.file_name)
+            } else if a.path.is_dir() {
                 std::cmp::Ordering::Less
             } else {
                 std::cmp::Ordering::Greater
@@ -230,5 +230,19 @@ impl DirContent {
             path,
             children,
         })
+    }
+}
+
+pub struct Entry {
+    pub path: PathBuf,
+    pub file_name: OsString,
+}
+
+impl From<DirEntry> for Entry {
+    fn from(value: DirEntry) -> Self {
+        Self {
+            path: value.path(),
+            file_name: value.file_name(),
+        }
     }
 }
