@@ -32,3 +32,17 @@ impl Block {
         buf.get_mut(area.x, area.bottom().saturating_sub(1)).set_char('└').set_style(self.style);
     }
 }
+
+
+
+pub struct Clear;
+
+impl Clear {
+    pub fn render(self, area: Rect, buf: &mut Buffer) {
+        for x in area.x..area.right() {
+            for y in area.y..area.bottom() {
+                buf.get_mut(x, y).reset();
+            }
+        }
+    }
+}

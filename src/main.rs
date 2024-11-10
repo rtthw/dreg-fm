@@ -6,7 +6,7 @@ use std::{fs::DirEntry, path::PathBuf};
 
 use clap::Parser;
 use dreg::prelude::*;
-use widgets::Block;
+use widgets::*;
 
 mod widgets;
 
