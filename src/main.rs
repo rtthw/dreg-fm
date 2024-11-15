@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     if let Some(path) = args.path {
         std::env::set_current_dir(path)?;
     }
-    
+
     CrosstermPlatform::new()?
         .run(FileManager {
             dir: DirContent::new(std::env::current_dir()?)?,
@@ -26,6 +26,7 @@ fn main() -> Result<()> {
             show_hidden_files: true,
             show_side_panel: false,
             input_handler: InputHandler::default(),
+            cursor_pos: (1, 0),
         })
 }
 
@@ -48,20 +49,36 @@ pub struct FileManager {
     show_hidden_files: bool,
     show_side_panel: bool,
     input_handler: InputHandler,
+    cursor_pos: (usize, usize),
 }
 
 impl Program for FileManager {
     fn update(&mut self, mut frame: Frame) {
         let mut main_area = frame.area;
         if self.show_side_panel {
+            let left_block_style = if matches!(self.cursor_pos.0, 0) {
+                Style::new()
+            } else {
+                Style::new().dim()
+            };
             let (side_area, area) = main_area.hsplit_portion(0.2);
             main_area = area;
-            Block::new(Style::new().dim()).render(side_area, &mut frame.buffer);
+            Block::new(left_block_style).render(side_area, &mut frame.buffer);
         }
         let (main_area, view_area) = main_area.hsplit_portion(0.5);
 
-        Block::new(Style::new()).render(main_area, &mut frame.buffer);
-        Block::new(Style::new().dim()).render(view_area, &mut frame.buffer);
+        let mid_block_style = if matches!(self.cursor_pos.0, 1) {
+            Style::new()
+        } else {
+            Style::new().dim()
+        };
+        let right_block_style = if matches!(self.cursor_pos.0, 2) {
+            Style::new()
+        } else {
+            Style::new().dim()
+        };
+        Block::new(mid_block_style).render(main_area, &mut frame.buffer);
+        Block::new(right_block_style).render(view_area, &mut frame.buffer);
 
         self.render_middle(main_area.inner(1, 1), &mut frame.buffer);
     }
@@ -77,6 +94,19 @@ impl Program for FileManager {
             Input::KeyDown(Scancode::S) => {
                 if self.input_handler.alt {
                     self.handle_command("toggle_show_side_panel");
+                }
+            }
+            Input::KeyDown(Scancode::LEFT) => {
+                if self.cursor_pos.0 == 1 {
+                    if self.show_side_panel {
+                        self.cursor_pos.0 = 0;
+                    } else {
+                        self.cursor_pos.0 = 2;
+                    }
+                } else if self.cursor_pos.0 == 0 {
+                    self.cursor_pos.0 = 2;
+                } else {
+                    self.cursor_pos.0 = 1;
                 }
             }
             i => {
@@ -101,6 +131,9 @@ impl FileManager {
             }
             Command::ToggleShowSidePanel => {
                 self.show_side_panel = !self.show_side_panel;
+                if !self.show_side_panel && self.cursor_pos.0 == 0 {
+                    self.cursor_pos.0 = 1;
+                }
             }
         }
     }
@@ -225,7 +258,7 @@ impl DirContent {
                 std::cmp::Ordering::Greater
             }
         });
-        
+
         Ok(Self {
             path,
             children,
