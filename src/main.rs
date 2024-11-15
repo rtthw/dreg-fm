@@ -109,6 +109,19 @@ impl Program for FileManager {
                     self.cursor_pos.0 = 1;
                 }
             }
+            Input::KeyDown(Scancode::RIGHT) => {
+                if self.cursor_pos.0 == 1 {
+                    self.cursor_pos.0 = 2;
+                } else if self.cursor_pos.0 == 0 {
+                    self.cursor_pos.0 = 1;
+                } else {
+                    if self.show_side_panel {
+                        self.cursor_pos.0 = 0;
+                    } else {
+                        self.cursor_pos.0 = 1;
+                    }
+                }
+            }
             i => {
                 self.input_handler.handle_input(i);
             }
