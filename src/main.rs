@@ -122,6 +122,13 @@ impl Program for FileManager {
                     }
                 }
             }
+            Input::KeyDown(Scancode::UP) => {
+                self.cursor_pos.1 = self.cursor_pos.1.saturating_sub(1);
+            }
+            Input::KeyDown(Scancode::DOWN) => {
+                let e_count = self.iter_dir().count().saturating_sub(1);
+                self.cursor_pos.1 = std::cmp::min(e_count, self.cursor_pos.1.saturating_add(1));
+            }
             i => {
                 self.input_handler.handle_input(i);
             }
@@ -168,7 +175,7 @@ impl FileManager {
 impl FileManager {
     fn render_middle(&mut self, area: Rect, buf: &mut Buffer) {
         // TODO: Scrolling.
-        for (row, entry) in area.rows().into_iter().zip(self.iter_dir()) {
+        for (index, (row, entry)) in area.rows().into_iter().zip(self.iter_dir()).enumerate() {
             let fg = if entry.path.is_dir() {
                 Color::Blue
             } else if entry.path.is_symlink() {
@@ -176,12 +183,17 @@ impl FileManager {
             } else {
                 Color::Gray
             };
+            let style = if index == self.cursor_pos.1 {
+                Style::new().bold()
+            } else {
+                Style::new().dim()
+            };
             buf.set_stringn(
                 row.x,
                 row.y,
                 entry.file_name.to_string_lossy(),
                 row.width as usize,
-                Style::new().dim().fg(fg),
+                style.fg(fg),
             );
         }
     }
