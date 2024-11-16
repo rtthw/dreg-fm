@@ -200,6 +200,15 @@ impl Program for FileManager {
                 }
             }
             Input::KeyDown(Scancode::Y) => {
+                match trash::delete_all(self.marked_files.drain()) {
+                    Ok(_) => {
+                        // TODO: Message log.
+                    }
+                    Err(e) => {
+                        // TODO: Message log.
+                        panic!("UNHANDLED ERROR: {e}");
+                    }
+                }
                 self.dialog = None;
             }
             Input::KeyDown(Scancode::N) => {
