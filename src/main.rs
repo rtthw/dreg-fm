@@ -2,7 +2,7 @@
 
 
 
-use std::{ffi::OsString, fs::DirEntry, path::PathBuf};
+use std::{collections::HashSet, ffi::OsString, fs::DirEntry, path::PathBuf};
 
 use clap::Parser;
 use dreg::prelude::*;
@@ -29,6 +29,7 @@ fn main() -> Result<()> {
             cursor_pos: (1, 0),
             // SAFETY: 5 is obviously more than 0.
             file_cache: lru::LruCache::new(std::num::NonZeroUsize::new(5).unwrap()),
+            marked_files: HashSet::new(),
         })
 }
 
@@ -54,6 +55,7 @@ pub struct FileManager {
     /// (panel_index, listing_index)
     cursor_pos: (usize, usize),
     file_cache: lru::LruCache<PathBuf, FileData>,
+    marked_files: HashSet<PathBuf>,
 }
 
 impl Program for FileManager {
@@ -147,11 +149,21 @@ impl Program for FileManager {
                 }
             }
             Input::KeyDown(Scancode::PAGEUP) => {
+                if self.cursor_pos.0 != 1 { return; }
                 if let Some(parent_dir) = self.dir.path.parent() {
                     if let Ok(dir_content) = DirContent::new(parent_dir) {
                         self.dir = dir_content;
                         self.cursor_pos.1 = 0;
                     }
+                }
+            }
+            Input::KeyDown(Scancode::APOSTROPHE) => {
+                if self.cursor_pos.0 != 1 { return; }
+                let Some(current_file) = self.iter_dir().nth(self.cursor_pos.1).cloned() else {
+                    return;
+                };
+                if !self.marked_files.remove(&current_file.path) {
+                    self.marked_files.insert(current_file.path);
                 }
             }
             i => {
@@ -209,11 +221,14 @@ impl FileManager {
                 FileType::Unknown => Color::Red,
                 FileType::Video => Color::Magenta,
             };
-            let style = if index == self.cursor_pos.1 {
+            let mut style = if index == self.cursor_pos.1 {
                 Style::new().bold()
             } else {
                 Style::new().dim()
             };
+            if self.marked_files.contains(&entry.path) {
+                style = style.underlined();
+            }
             buf.set_stringn(
                 row.x,
                 row.y,
