@@ -134,6 +134,26 @@ impl Program for FileManager {
                 let e_count = self.iter_dir().count().saturating_sub(1);
                 self.cursor_pos.1 = std::cmp::min(e_count, self.cursor_pos.1.saturating_add(1));
             }
+            Input::KeyDown(Scancode::ENTER) => {
+                if self.cursor_pos.0 != 1 { return; }
+                let Some(current_file) = self.iter_dir().nth(self.cursor_pos.1) else { return; };
+                if current_file.is_dir() {
+                    if let Ok(dir_content) = DirContent::new(&current_file.path) {
+                        self.dir = dir_content;
+                        self.cursor_pos.1 = 0;
+                    }
+                } else {
+                    self.cursor_pos.1 = 2;
+                }
+            }
+            Input::KeyDown(Scancode::PAGEUP) => {
+                if let Some(parent_dir) = self.dir.path.parent() {
+                    if let Ok(dir_content) = DirContent::new(parent_dir) {
+                        self.dir = dir_content;
+                        self.cursor_pos.1 = 0;
+                    }
+                }
+            }
             i => {
                 self.input_handler.handle_input(i);
             }
