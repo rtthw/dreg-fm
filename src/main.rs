@@ -176,12 +176,13 @@ impl FileManager {
     fn render_middle(&mut self, area: Rect, buf: &mut Buffer) {
         // TODO: Scrolling.
         for (index, (row, entry)) in area.rows().into_iter().zip(self.iter_dir()).enumerate() {
-            let fg = if entry.path.is_dir() {
-                Color::Blue
-            } else if entry.path.is_symlink() {
-                Color::Yellow
-            } else {
-                Color::Gray
+            let fg = match entry.ty {
+                FileType::Text => Color::Blue,
+                FileType::Directory => Color::Green,
+                FileType::Symlink => Color::Yellow,
+                FileType::Image => Color::Cyan,
+                FileType::Unknown => Color::Red,
+                FileType::Video => Color::Magenta,
             };
             let style = if index == self.cursor_pos.1 {
                 Style::new().bold()
@@ -294,6 +295,7 @@ impl DirContent {
 pub struct Entry {
     pub path: PathBuf,
     pub file_name: OsString,
+    pub ty: FileType,
 }
 
 impl From<DirEntry> for Entry {
@@ -301,6 +303,45 @@ impl From<DirEntry> for Entry {
         Self {
             path: value.path(),
             file_name: value.file_name(),
+            ty: FileType::from(&value),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FileType {
+    Unknown,
+    Directory,
+    Symlink,
+    Image,
+    Text,
+    Video,
+}
+
+impl From<&DirEntry> for FileType {
+    fn from(value: &DirEntry) -> Self {
+        let path = value.path();
+        if path.is_dir() {
+            FileType::Directory
+        } else if path.is_symlink() {
+            FileType::Symlink
+        } else if path.is_file() {
+            let ext = path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            match ext {
+                "" => {
+                    FileType::Text
+                }
+                "md" => FileType::Text,
+                "rs" => FileType::Text,
+                "toml" => FileType::Text,
+                "yaml" | "yml" => FileType::Text,
+                _ => FileType::Unknown,
+                // e => todo!("handle {e} files"),
+            }
+        } else {
+            FileType::Unknown
         }
     }
 }
