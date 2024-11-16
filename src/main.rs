@@ -30,6 +30,7 @@ fn main() -> Result<()> {
             // SAFETY: 5 is obviously more than 0.
             file_cache: lru::LruCache::new(std::num::NonZeroUsize::new(5).unwrap()),
             marked_files: HashSet::new(),
+            dialog: None,
         })
 }
 
@@ -56,11 +57,13 @@ pub struct FileManager {
     cursor_pos: (usize, usize),
     file_cache: lru::LruCache<PathBuf, FileData>,
     marked_files: HashSet<PathBuf>,
+    dialog: Option<Dialog>,
 }
 
 impl Program for FileManager {
     fn update(&mut self, mut frame: Frame) {
-        let mut main_area = frame.area;
+        let full_area = frame.area;
+        let mut main_area = full_area;
         if self.show_side_panel {
             let left_block_style = if matches!(self.cursor_pos.0, 0) {
                 Style::new()
@@ -88,6 +91,36 @@ impl Program for FileManager {
 
         self.render_middle(main_area.inner(1, 1), &mut frame.buffer);
         self.render_view(view_area.inner(1, 1), &mut frame.buffer);
+
+        if let Some(dialog) = &self.dialog {
+            match dialog {
+                Dialog::ConfirmDelete => {
+                    let dialog_area = full_area.inner(full_area.width / 4, full_area.height / 4);
+                    Clear.render(dialog_area, &mut frame.buffer);
+                    Block::new(Style::new()).render(dialog_area, &mut frame.buffer);
+                    let inner_area = dialog_area.inner(1, 1);
+                    let (dialog_top, dialog_bot) = inner_area.vsplit_portion(0.7);
+                    let buttons_area = dialog_bot.inner_centered(9, 1);
+                    let (yes_btn, _spacer, no_btn) = buttons_area.hsplit_even3();
+
+                    let text = format!("Delete {} file(s)?", self.marked_files.len());
+                    let text_width = std::cmp::min(text.len(), dialog_top.width as usize);
+
+                    frame.buffer.set_stringn(
+                        dialog_top.x,
+                        dialog_top.y,
+                        text,
+                        text_width,
+                        Style::new().bold(),
+                    );
+
+                    frame.buffer.set_stringn(yes_btn.x, yes_btn.y, "Y", 1, Style::new().underlined());
+                    frame.buffer.set_stringn(yes_btn.x + 1, yes_btn.y, "es", 2, Style::new());
+                    frame.buffer.set_stringn(no_btn.x, no_btn.y, "N", 1, Style::new().underlined());
+                    frame.buffer.set_stringn(no_btn.x + 1, no_btn.y, "o", 1, Style::new());
+                }
+            }
+        }
     }
 
     fn on_input(&mut self, input: Input) {
@@ -165,6 +198,17 @@ impl Program for FileManager {
                 if !self.marked_files.remove(&current_file.path) {
                     self.marked_files.insert(current_file.path);
                 }
+            }
+            Input::KeyDown(Scancode::Y) => {
+                self.dialog = None;
+            }
+            Input::KeyDown(Scancode::N) => {
+                self.dialog = None;
+            }
+            Input::KeyDown(Scancode::D) => {
+                if self.cursor_pos.0 != 1 { return; }
+                if self.marked_files.is_empty() { return; }
+                self.dialog = Some(Dialog::ConfirmDelete);
             }
             i => {
                 self.input_handler.handle_input(i);
@@ -303,6 +347,12 @@ impl FileManager {
             }
         }
     }
+}
+
+
+
+pub enum Dialog {
+    ConfirmDelete,
 }
 
 
@@ -445,10 +495,13 @@ impl From<&DirEntry> for FileType {
                 "" => {
                     FileType::Text
                 }
+                "asm" => FileType::Text,
+                "lock" => FileType::Text,
                 "md" => FileType::Text,
                 "rs" => FileType::Text,
                 "toml" => FileType::Text,
                 "yaml" | "yml" => FileType::Text,
+                "wat" => FileType::Text,
                 _ => FileType::Unknown,
                 // e => todo!("handle {e} files"),
             }
