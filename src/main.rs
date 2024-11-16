@@ -27,6 +27,8 @@ fn main() -> Result<()> {
             show_side_panel: false,
             input_handler: InputHandler::default(),
             cursor_pos: (1, 0),
+            // SAFETY: 5 is obviously more than 0.
+            file_cache: lru::LruCache::new(std::num::NonZeroUsize::new(5).unwrap()),
         })
 }
 
@@ -49,7 +51,9 @@ pub struct FileManager {
     show_hidden_files: bool,
     show_side_panel: bool,
     input_handler: InputHandler,
+    /// (panel_index, listing_index)
     cursor_pos: (usize, usize),
+    file_cache: lru::LruCache<PathBuf, FileData>,
 }
 
 impl Program for FileManager {
@@ -81,6 +85,7 @@ impl Program for FileManager {
         Block::new(right_block_style).render(view_area, &mut frame.buffer);
 
         self.render_middle(main_area.inner(1, 1), &mut frame.buffer);
+        self.render_view(view_area.inner(1, 1), &mut frame.buffer);
     }
 
     fn on_input(&mut self, input: Input) {
@@ -198,6 +203,71 @@ impl FileManager {
             );
         }
     }
+
+    fn render_view(&mut self, area: Rect, buf: &mut Buffer) {
+        let Some(current_file) = self.iter_dir().nth(self.cursor_pos.1).cloned() else { return; };
+        let file_data = self.file_cache.get_or_insert_mut(current_file.path.clone(), || {
+            FileData::from(&current_file)
+        });
+
+        match file_data {
+            FileData::Directory(content) => {
+                let iter = content.children.iter()
+                    .filter(|e| {
+                        if !self.show_hidden_files {
+                            if e.file_name.to_str().is_some_and(|s| s.starts_with(".")) {
+                                return false;
+                            }
+                        }
+
+                        true
+                    });
+                for (row, entry) in area.rows().into_iter().zip(iter) {
+                    let fg = match entry.ty {
+                        FileType::Text => Color::Blue,
+                        FileType::Directory => Color::Green,
+                        FileType::Symlink => Color::Yellow,
+                        FileType::Image => Color::Cyan,
+                        FileType::Unknown => Color::Red,
+                        FileType::Video => Color::Magenta,
+                    };
+                    buf.set_stringn(
+                        row.x,
+                        row.y,
+                        entry.file_name.to_string_lossy(),
+                        row.width as usize,
+                        Style::new().fg(fg),
+                    );
+                }
+            }
+            FileData::Text(content) => {
+                for (row, line) in area.rows().into_iter().zip(content.lines()) {
+                    buf.set_stringn(
+                        row.x,
+                        row.y,
+                        line,
+                        row.width as usize,
+                        Style::new(),
+                    );
+                }
+            }
+            FileData::Error(msg) => {
+                let msg_w = std::cmp::max(area.width as usize, msg.len());
+                let msg_area = area.inner_centered(area.width, 1);
+                buf.set_stringn(
+                    msg_area.x,
+                    msg_area.y,
+                    msg,
+                    msg_w,
+                    Style::new().bold().fg(Color::Red),
+                );
+            }
+            FileData::Null => {
+                let msg_area = area.inner_centered(15, 1);
+                buf.set_stringn(msg_area.x, msg_area.y, "Nothing here...", 15, Style::new().dim());
+            }
+        }
+    }
 }
 
 
@@ -292,6 +362,7 @@ impl DirContent {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Entry {
     pub path: PathBuf,
     pub file_name: OsString,
@@ -305,6 +376,12 @@ impl From<DirEntry> for Entry {
             file_name: value.file_name(),
             ty: FileType::from(&value),
         }
+    }
+}
+
+impl Entry {
+    pub fn is_dir(&self) -> bool {
+        matches!(self.ty, FileType::Directory)
     }
 }
 
@@ -342,6 +419,33 @@ impl From<&DirEntry> for FileType {
             }
         } else {
             FileType::Unknown
+        }
+    }
+}
+
+pub enum FileData {
+    Directory(DirContent),
+    Text(String),
+    Null,
+    Error(String),
+}
+
+impl From<&Entry> for FileData {
+    fn from(value: &Entry) -> Self {
+        match value.ty {
+            FileType::Directory => {
+                match DirContent::new(&value.path) {
+                    Ok(dir_content) => Self::Directory(dir_content),
+                    Err(e) => Self::Error(e.to_string()),
+                }
+            }
+            FileType::Text => {
+                match std::fs::read_to_string(&value.path) {
+                    Ok(string) => Self::Text(string),
+                    Err(e) => Self::Error(e.to_string()),
+                }
+            }
+            _ => Self::Null,
         }
     }
 }
