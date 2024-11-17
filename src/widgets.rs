@@ -16,7 +16,7 @@ impl Block {
             style,
         }
     }
-    
+
     pub fn render(self, area: Rect, buf: &mut Buffer) {
         for y in area.top()..area.bottom() {
             buf.get_mut(area.x, y).set_char('│').set_style(self.style);
@@ -33,7 +33,7 @@ impl Block {
     }
 }
 
-
+
 
 pub struct Clear;
 
