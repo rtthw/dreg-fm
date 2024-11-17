@@ -65,7 +65,9 @@ pub struct FileManager {
 impl Program for FileManager {
     fn update(&mut self, mut frame: Frame) {
         let full_area = frame.area;
-        let mut main_area = full_area;
+        let (top_area, mut main_area) = full_area.vsplit_len(1);
+        frame.buffer.set_style(top_area, Style::new().fg(Color::DarkGray).reversed());
+
         if self.show_side_panel {
             let left_block_style = if matches!(self.cursor_pos.0, 0) {
                 Style::new()
@@ -78,18 +80,15 @@ impl Program for FileManager {
         }
         let (main_area, view_area) = main_area.hsplit_portion(0.5);
 
-        let mid_block_style = if matches!(self.cursor_pos.0, 1) {
-            Style::new()
-        } else {
-            Style::new().dim()
-        };
-        let right_block_style = if matches!(self.cursor_pos.0, 2) {
-            Style::new()
-        } else {
-            Style::new().dim()
-        };
-        Block::new(mid_block_style).render(main_area, &mut frame.buffer);
-        Block::new(right_block_style).render(view_area, &mut frame.buffer);
+        match self.cursor_pos.0 {
+            1 => {
+                Block::new(Style::new().dim()).render(main_area, &mut frame.buffer);
+            }
+            2 => {
+                Block::new(Style::new().dim()).render(view_area, &mut frame.buffer);
+            }
+            _ => {}
+        }
 
         self.render_middle(main_area.inner(1, 1), &mut frame.buffer);
         self.render_view(view_area.inner(1, 1), &mut frame.buffer);
